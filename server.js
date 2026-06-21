@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
+const employeeRoutes = require("./routes/employeeRoutes");
+const authRoutes = require("./routes/authRoute");
+
 const app = express();
 
 app.use(cors());
@@ -16,6 +19,9 @@ mongoose
 app.get("/", (req, res) => {
   res.send("Employee Management app is running!");
 });
+
+app.use("/employees", employeeRoutes);
+app.use("/users", authRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
