@@ -49,16 +49,75 @@ router.post("/login", async (req, res) => {
     }
 
     // Generate real JWT token
-    const token = jwt.sign(
+    const accesstoken = jwt.sign(
       { id: user._id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" },
+      { expiresIn: "1m" },
     );
 
-    res.json({ token, username: user.username, role: user.role });
+    // Refresh token — long-lived, only used to get new access tokens
+    const refreshToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    // Save refresh token to DB so we can validate/revoke it later
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.json({
+      token: accesstoken,
+      refreshToken,
+      username: user.username,
+      role: user.role,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+router.post("/refresh", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Refresh token required" });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res
+        .status(403)
+        .json({ message: "Invalid or expired refresh token" });
+    }
+
+    const user = await User.findById(payload.id);
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(403).json({ message: "Refresh token not recognized" });
+    }
+
+    const newAccessToken = jwt.sign(
+      { id: user._id, username: user.username, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "5m" },
+    );
+
+    res.json({ token: newAccessToken });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post("/logout", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    await User.findOneAndUpdate({ refreshToken }, { refreshToken: null });
+    res.json({ message: "Logged out" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 module.exports = router;
