@@ -21,7 +21,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/employees", employeeRoutes);
-app.use("/users", authRoutes);
+app.use("/api/auth", authRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
