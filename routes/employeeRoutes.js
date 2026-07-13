@@ -1,10 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const Employee = require("../models/employee");
+const auth = require("../middleware/auth");
+const admin = require("../middleware/admin");
+
+router.use(auth);
 
 router.get("/", async (req, res) => {
   try {
-    const employees = await Employee.find();
+    const employees = await Employee.find({
+      tenantId: req.user.tenantId,
+    });
     res.json(employees);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -13,7 +19,10 @@ router.get("/", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id);
+    const employee = await Employee.findOne({
+      _id: req.params.id,
+      tenantId: req.user.tenantId,
+    });
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
@@ -23,7 +32,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", admin, async (req, res) => {
   const employee = new Employee({
     name: req.body.name,
     email: req.body.email,
@@ -31,6 +40,7 @@ router.post("/", async (req, res) => {
     role: req.body.role,
     salary: req.body.salary,
     status: req.body.status,
+    tenantId: req.user.tenantId,
   });
 
   try {
@@ -41,10 +51,13 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", admin, async (req, res) => {
   try {
-    const updatedEmployee = await Employee.findByIdAndUpdate(
-      req.params.id,
+    const updatedEmployee = await Employee.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenantId: req.user.tenantId,
+      },
       req.body,
       { new: true },
     );
@@ -57,9 +70,12 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id",admin, async (req, res) => {
   try {
-    const deletedEmployee = await Employee.findByIdAndDelete(req.params.id);
+    const deletedEmployee = await Employee.findOneAndDelete({
+      _id: req.params.id,
+      tenantId: req.user.tenantId,
+    });
     if (!deletedEmployee) {
       return res.status(404).json({ message: "Employee not found" });
     }
