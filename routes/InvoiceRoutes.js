@@ -106,6 +106,8 @@ router.get("/", auth, async (req, res) => {
   try {
     const page = Number.parseInt(req.query.page, 10) || 1;
     const limit = Number.parseInt(req.query.limit, 10) || 10;
+    const search = (req.query.search || "").trim();
+    const status = req.query.status;
 
     if (
       !Number.isSafeInteger(page) ||
@@ -122,6 +124,29 @@ router.get("/", auth, async (req, res) => {
     const filter = {
       tenantId: req.user.tenantId,
     };
+
+    // Search by invoice number or supplier name
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      filter.$or = [
+        { invoiceNumber: { $regex: escapedSearch, $options: "i" } },
+        { supplierName: { $regex: escapedSearch, $options: "i" } },
+      ];
+    }
+
+    // Filter by invoice status
+    const allowedStatuses = ["Pending", "Paid", "Overdue"];
+
+    if (status && status !== "All") {
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "Invalid invoice status.",
+        });
+      }
+
+      filter.status = status;
+    }
 
     const [invoices, total] = await Promise.all([
       Invoice.find(filter)
@@ -140,6 +165,7 @@ router.get("/", auth, async (req, res) => {
       totalPages: Math.ceil(total / limit),
     });
   } catch (err) {
+    console.error("Failed to fetch invoices:", err);
     return res.status(500).json({
       message: "Failed to fetch invoices.",
     });
@@ -280,20 +306,20 @@ router.put("/:id", auth, async (req, res) => {
     console.error("Update invoice error:", err);
 
     if (err.code === 11000) {
-        return res.status(409).json({
-            message: "Invoice number already exists for this company.",
-        });
+      return res.status(409).json({
+        message: "Invoice number already exists for this company.",
+      });
     }
 
     if (err.name === "ValidationError") {
-        return res.status(400).json({
-            message: err.message,
-        });
+      return res.status(400).json({
+        message: err.message,
+      });
     }
 
     return res.status(500).json({
-        message: "Failed to update invoice.",
+      message: "Failed to update invoice.",
     });
-}
+  }
 });
 module.exports = router;
