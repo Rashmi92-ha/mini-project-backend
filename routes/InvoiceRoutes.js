@@ -109,7 +109,8 @@ router.get("/", auth, async (req, res) => {
     const search = (req.query.search || "").trim();
     const status = req.query.status;
     const sortField = req.query.sortField || "createdAt";
-    const sortOrder = Number.parseInt(req.query.sortOrder, 10) || -1;
+    const sortOrder =
+      req.query.sortOrder === undefined ? -1 : Number(req.query.sortOrder);
 
     if (
       !Number.isSafeInteger(page) ||
@@ -132,15 +133,12 @@ router.get("/", auth, async (req, res) => {
       "createdAt",
     ];
 
-    if (!allowedSortFields.includes(sortField)) {
+    if (
+      !allowedSortFields.includes(sortField) ||
+      ![-1, 1].includes(sortOrder)
+    ) {
       return res.status(400).json({
-        message: "Invalid sort field.",
-      });
-    }
-
-    if (![-1, 1].includes(sortOrder)) {
-      return res.status(400).json({
-        message: "Invalid sort order.",
+        message: "Invalid sort field or sort order.",
       });
     }
 
@@ -245,54 +243,111 @@ router.put("/:id", auth, async (req, res) => {
       status,
     } = req.body;
 
-    // Validate required fields
-    if (
-      typeof invoiceNumber !== "string" ||
-      !invoiceNumber.trim() ||
-      typeof supplierName !== "string" ||
-      !supplierName.trim() ||
-      !invoiceDate ||
-      !Number.isFinite(amount) ||
-      amount < 0
-    ) {
-      return res.status(400).json({
-        message: "Please provide valid required invoice fields.",
-      });
-    }
+    const updates = {};
 
-    if (tax !== undefined && (!Number.isFinite(tax) || tax < 0)) {
-      return res.status(400).json({
-        message: "Tax must be a non-negative number.",
-      });
-    }
-
-    if (
-      status !== undefined &&
-      !["Pending", "Paid", "Overdue"].includes(status)
-    ) {
-      return res.status(400).json({
-        message: "Invalid invoice status.",
-      });
-    }
-
-    const parsedInvoiceDate = new Date(invoiceDate);
-
-    if (Number.isNaN(parsedInvoiceDate.getTime())) {
-      return res.status(400).json({
-        message: "Invalid invoice date.",
-      });
-    }
-
-    let parsedDueDate = null;
-
-    if (dueDate) {
-      parsedDueDate = new Date(dueDate);
-
-      if (Number.isNaN(parsedDueDate.getTime())) {
+    // Validate and prepare only the fields provided.
+    if (invoiceNumber !== undefined) {
+      if (typeof invoiceNumber !== "string" || !invoiceNumber.trim()) {
         return res.status(400).json({
-          message: "Invalid due date.",
+          message: "Invalid invoice number.",
         });
       }
+
+      updates.invoiceNumber = invoiceNumber.trim();
+    }
+
+    if (supplierName !== undefined) {
+      if (typeof supplierName !== "string" || !supplierName.trim()) {
+        return res.status(400).json({
+          message: "Invalid supplier name.",
+        });
+      }
+
+      updates.supplierName = supplierName.trim();
+    }
+
+    if (invoiceDate !== undefined) {
+      if (!invoiceDate) {
+        return res.status(400).json({
+          message: "Invalid invoice date.",
+        });
+      }
+
+      const parsedInvoiceDate = new Date(invoiceDate);
+
+      if (Number.isNaN(parsedInvoiceDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid invoice date.",
+        });
+      }
+
+      updates.invoiceDate = parsedInvoiceDate;
+    }
+
+    if (dueDate !== undefined) {
+      if (dueDate === null || dueDate === "") {
+        updates.dueDate = null;
+      } else {
+        const parsedDueDate = new Date(dueDate);
+
+        if (Number.isNaN(parsedDueDate.getTime())) {
+          return res.status(400).json({
+            message: "Invalid due date.",
+          });
+        }
+
+        updates.dueDate = parsedDueDate;
+      }
+    }
+
+    if (amount !== undefined) {
+      if (
+        typeof amount !== "number" ||
+        !Number.isFinite(amount) ||
+        amount < 0
+      ) {
+        return res.status(400).json({
+          message: "Amount must be a non-negative number.",
+        });
+      }
+
+      updates.amount = amount;
+    }
+
+    if (tax !== undefined) {
+      if (typeof tax !== "number" || !Number.isFinite(tax) || tax < 0) {
+        return res.status(400).json({
+          message: "Tax must be a non-negative number.",
+        });
+      }
+
+      updates.tax = tax;
+    }
+
+    if (currency !== undefined) {
+      if (typeof currency !== "string" || !currency.trim()) {
+        return res.status(400).json({
+          message: "Invalid currency.",
+        });
+      }
+
+      updates.currency = currency.trim();
+    }
+
+    if (status !== undefined) {
+      if (!["Pending", "Paid", "Overdue"].includes(status)) {
+        return res.status(400).json({
+          message: "Invalid invoice status.",
+        });
+      }
+
+      updates.status = status;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        message: "Please provide at least one field to update.",
+      });
     }
 
     const updatedInvoice = await Invoice.findOneAndUpdate(
@@ -301,16 +356,7 @@ router.put("/:id", auth, async (req, res) => {
         tenantId: req.user.tenantId,
       },
       {
-        $set: {
-          invoiceNumber: invoiceNumber.trim(),
-          supplierName: supplierName.trim(),
-          invoiceDate: parsedInvoiceDate,
-          dueDate: parsedDueDate,
-          amount,
-          tax: tax ?? 0,
-          currency: currency ?? "INR",
-          status: status ?? "Pending",
-        },
+        $set: updates,
       },
       {
         new: true,
@@ -345,4 +391,39 @@ router.put("/:id", auth, async (req, res) => {
     });
   }
 });
+
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        message: "Invalid invoice ID.",
+      });
+    }
+
+    const deletedInvoice = await Invoice.findOneAndDelete({
+      _id: id,
+      tenantId: req.user.tenantId,
+    });
+
+    if (!deletedInvoice) {
+      return res.status(404).json({
+        message: "Invoice not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Invoice deleted successfully.",
+      invoice: deletedInvoice,
+    });
+  } catch (err) {
+    console.error("Delete invoice error:", err);
+
+    return res.status(500).json({
+      message: "Failed to delete invoice.",
+    });
+  }
+});
+
 module.exports = router;
