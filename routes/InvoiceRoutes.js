@@ -108,6 +108,8 @@ router.get("/", auth, async (req, res) => {
     const limit = Number.parseInt(req.query.limit, 10) || 10;
     const search = (req.query.search || "").trim();
     const status = req.query.status;
+    const sortField = req.query.sortField || "createdAt";
+    const sortOrder = Number.parseInt(req.query.sortOrder, 10) || -1;
 
     if (
       !Number.isSafeInteger(page) ||
@@ -118,6 +120,27 @@ router.get("/", auth, async (req, res) => {
     ) {
       return res.status(400).json({
         message: "Page must be positive and limit must be between 1 and 100.",
+      });
+    }
+
+    const allowedSortFields = [
+      "invoiceNumber",
+      "supplierName",
+      "invoiceDate",
+      "amount",
+      "tax",
+      "createdAt",
+    ];
+
+    if (!allowedSortFields.includes(sortField)) {
+      return res.status(400).json({
+        message: "Invalid sort field.",
+      });
+    }
+
+    if (![-1, 1].includes(sortOrder)) {
+      return res.status(400).json({
+        message: "Invalid sort order.",
       });
     }
 
@@ -150,7 +173,7 @@ router.get("/", auth, async (req, res) => {
 
     const [invoices, total] = await Promise.all([
       Invoice.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ [sortField]: sortOrder })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
