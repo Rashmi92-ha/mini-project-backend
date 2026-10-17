@@ -193,6 +193,33 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+router.get("/summary", auth, async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+
+    const [totalInvoices, paidInvoices, pendingInvoices, overdueInvoices] =
+      await Promise.all([
+        Invoice.countDocuments({ tenantId }),
+        Invoice.countDocuments({ tenantId, status: "Paid" }),
+        Invoice.countDocuments({ tenantId, status: "Pending" }),
+        Invoice.countDocuments({ tenantId, status: "Overdue" }),
+      ]);
+
+    return res.status(200).json({
+      totalInvoices,
+      paidInvoices,
+      pendingInvoices,
+      overdueInvoices,
+    });
+  } catch (err) {
+    console.error("Invoice summary error:", err);
+
+    return res.status(500).json({
+      message: "Failed to fetch invoice summary.",
+    });
+  }
+});
+
 // Get one invoice belonging to the authenticated tenant
 router.get("/:id", auth, async (req, res) => {
   try {
