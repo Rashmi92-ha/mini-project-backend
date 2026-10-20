@@ -6,6 +6,7 @@ require("dotenv").config();
 const employeeRoutes = require("./routes/employeeRoutes");
 const authRoutes = require("./routes/authRoute");
 const invoiceRoutes = require("./routes/InvoiceRoutes");
+const departmentRoutes = require("./routes/departmentRoutes");
 
 const app = express();
 
@@ -23,7 +24,8 @@ app.get("/", (req, res) => {
 
 app.use("/employees", employeeRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/invoices", invoiceRoutes)
+app.use("/api/invoices", invoiceRoutes);
+app.use("/api/departments", departmentRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
