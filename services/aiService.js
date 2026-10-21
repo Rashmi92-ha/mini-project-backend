@@ -1,3 +1,5 @@
+const { GoogleGenAI } = require("@google/genai");
+
 function generateRuleBasedInsights(stats) {
   const insights = [];
 
@@ -30,43 +32,27 @@ async function generateDashboardInsights(stats) {
   const fallbackInsights = generateRuleBasedInsights(stats);
 
   try {
-    const response = await fetch("http://localhost:11434/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(60000),
-      body: JSON.stringify({
-        model: "llama3.2:1b",
-        stream: false,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a business dashboard assistant. Explain all supplied " +
-              "statistics, including employees, departments, and invoices. " +
-              "Mention total, active, and inactive employees, total departments, " +
-              "and total, paid, pending, and overdue invoices. Use only the " +
-              "provided numbers. Do not invent data or infer unsupported causes. " +
-              "Return 3 to 4 concise sentences.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify(stats),
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Ollama returned HTTP ${response.status}`);
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    const data = await response.json();
-    const explanation = data.message?.content?.trim();
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    });
+
+    const response = await ai.interactions.create({
+      model: "gemini-3.8-flash",
+      input:
+        "Explain these dashboard statistics in 3 to 4 concise sentences. " +
+        "Cover employees, departments, and invoices. Use only the supplied " +
+        "numbers. Do not invent data or infer unsupported causes.\n\n" +
+        JSON.stringify(stats),
+    });
+
+    const explanation = response.output_text?.trim();
 
     if (!explanation) {
-      throw new Error("Ollama returned an empty response");
+      throw new Error("Gemini returned an empty response");
     }
 
     return {
@@ -76,7 +62,7 @@ async function generateDashboardInsights(stats) {
     };
   } catch (error) {
     console.error(
-      "Ollama unavailable; using rule-based insights:",
+      "Gemini unavailable; using rule-based insights:",
       error.message,
     );
 
