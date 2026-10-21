@@ -48,9 +48,14 @@ router.get("/insights", auth, async (req, res) => {
       },
     };
 
-    const insights = await generateDashboardInsights(stats);
+    const result = await generateDashboardInsights(stats);
 
-    return res.status(200).json({ stats, insights });
+    return res.status(200).json({
+      stats,
+      insights: result.insights,
+      aiExplanation: result.aiExplanation,
+      aiEnabled: result.aiEnabled,
+    });
   } catch (error) {
     console.error("Dashboard insights error:", error.message);
 
