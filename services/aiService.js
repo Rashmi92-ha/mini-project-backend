@@ -61,10 +61,7 @@ async function generateDashboardInsights(stats) {
       aiEnabled: true,
     };
   } catch (error) {
-    console.error(
-      "Gemini unavailable; using rule-based insights:",
-      error.message,
-    );
+    console.error("Gemini unavailable; using rule-based insights:", error);
 
     return {
       insights: fallbackInsights,

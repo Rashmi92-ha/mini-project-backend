@@ -1,5 +1,6 @@
 const express = require("express");
 const auth = require("../middleware/auth");
+const { redisClient } = require("../config/redisClient");
 const Employee = require("../models/employee");
 const Invoice = require("../models/Invoice");
 const Department = require("../models/department");
@@ -10,7 +11,25 @@ const router = express.Router();
 router.get("/insights", auth, async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const cacheKey = `dashboard:insights:${tenantId}`;
 
+    // 1. Check Redis cache first
+    if (redisClient.isReady) {
+      try {
+        const cachedData = await redisClient.get(cacheKey);
+
+        if (cachedData) {
+          console.log("Redis cache HIT");
+          return res.status(200).json(JSON.parse(cachedData));
+        }
+
+        console.log("Redis cache MISS");
+      } catch (cacheError) {
+        console.error("Redis cache read failed:", cacheError.message);
+      }
+    }
+
+    // 2. Fetch dashboard statistics from MongoDB
     const [
       totalEmployees,
       activeEmployees,
@@ -48,14 +67,31 @@ router.get("/insights", auth, async (req, res) => {
       },
     };
 
+    // 3. Generate AI insights, with rule-based fallback
     const result = await generateDashboardInsights(stats);
 
-    return res.status(200).json({
+    const responseData = {
       stats,
       insights: result.insights,
       aiExplanation: result.aiExplanation,
       aiEnabled: result.aiEnabled,
-    });
+    };
+
+    // 4. Save response to Redis for 60 seconds
+    if (redisClient.isReady) {
+      try {
+        await redisClient.set(cacheKey, JSON.stringify(responseData), {
+          EX: 60,
+        });
+
+        console.log("Redis cache saved successfully");
+      } catch (cacheError) {
+        console.error("Redis cache save failed:", cacheError.message);
+      }
+    }
+
+    // 5. Return the dashboard response
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error("Dashboard insights error:", error.message);
 
