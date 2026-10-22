@@ -1,8 +1,9 @@
+require("dotenv").config();
+const { connectRedis } = require("./config/redisClient");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-require("dotenv").config();
 
 const employeeRoutes = require("./routes/employeeRoutes");
 const authRoutes = require("./routes/authRoute");
@@ -47,6 +48,18 @@ app.use("/api/departments", departmentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await connectRedis();
+    console.log("✅ Redis connected");
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Redis connection failed:", error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
