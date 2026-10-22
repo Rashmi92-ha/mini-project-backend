@@ -12,6 +12,7 @@ const departmentRoutes = require("./routes/departmentRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
+app.set("trust proxy", 1);
 
 app.use(cors());
 app.use(express.json());
